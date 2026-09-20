@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <link rel="stylesheet" href="popup.css" />
+    <title>Apify Monetization Insights</title>
+  </head>
+  <body>
+    <header class="hd">
+      <span class="logo">📊</span>
+      <span class="name">Apify Monetization Insights</span>
+      <button id="open-settings" class="icon-button" type="button" title="Settings" aria-label="Settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3" />
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+        </svg>
+      </button>
+    </header>
+
+    <div id="view-main">
+      <section class="card">
+        <div class="card-title">What this does</div>
+        <p class="blurb">
+          On the Console's <strong>Monetization insights</strong> page, adds a
+          breakdown panel below the chart: click a day to see which Actors
+          drove that day's revenue, cost, profit and runs.
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Cached breakdowns</div>
+        <div id="cache-body" class="muted">Loading…</div>
+        <div class="row">
+          <button id="clear-cache">Clear cache</button>
+        </div>
+      </section>
+
+      <footer class="ft">
+        <a id="open-insights" href="https://console.apify.com/actors/insights/monetization" target="_blank" rel="noopener">
+          Open Insights →
+        </a>
+      </footer>
+    </div>
+
+    <div id="view-settings" hidden>
+      <button id="back-to-main" class="back-button" type="button">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6" />
+        </svg>
+        Back
+      </button>
+
+      <section class="card">
+        <div class="card-title">Settings</div>
+        <label class="field field-inline">
+          <input id="highlights-on" type="checkbox" />
+          <span>Show Highlights under the chart (top profit, top cost, best and worst success rate for the selected range)</span>
+        </label>
+        <label class="field">
+          <span>Actors shown in breakdown tooltip</span>
+          <input id="tooltip-actor-count" type="number" min="1" max="50" />
+        </label>
+        <div class="field-hint">
+          Default is <span id="tooltip-actor-count-default"></span>.
+          <button id="tooltip-actor-count-reset" class="link-button" type="button">Reset to default</button>
+        </div>
+      </section>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

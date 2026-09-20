@@ -1,0 +1,516 @@
+.aap-overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.aap-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.aap-toolbar {
+  margin-bottom: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.aap-toggles-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 0;
+}
+
+/* ---- date range: pills + custom button next to the Console's month picker
+   Mirrors the native react-select control (measured on the live page, Sep
+   2026): black #0a0a0b fill, 1px #333538 border, 6px radius, 36px tall,
+   14px/400 text, 16px chevron. */
+.aap-range-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  align-self: center;
+  font-family: inherit;
+}
+.aap-range-select-fallback {
+  margin: 8px 0 4px;
+}
+
+.aap-range-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid #333538;
+  background: transparent;
+  color: #d1d5db;
+  font: inherit;
+  font-size: 14px;
+  line-height: 20px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.aap-range-pill:hover {
+  border-color: #4f5257;
+  color: #f4f4f5;
+}
+/* Active: the extension's teal accent (same as the toggle checkboxes and
+   the pinned tooltip), filled, so it can't be mistaken for hover. */
+.aap-range-pill.aap-range-active {
+  background: rgba(45, 212, 191, 0.18);
+  border-color: #2dd4bf;
+  color: #ffffff;
+  font-weight: 500;
+  box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.35);
+}
+.aap-range-pill.aap-range-active:hover {
+  background: rgba(45, 212, 191, 0.26);
+  border-color: #5eead4;
+}
+.aap-range-pill svg {
+  flex: none;
+}
+
+.aap-range-custom-wrap {
+  position: relative;
+}
+.aap-range-trigger {
+  padding: 0 10px 0 12px;
+  background: #0a0a0b;
+}
+.aap-range-trigger[aria-expanded="true"] {
+  border-color: #6b6f76;
+}
+
+.aap-range-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 9998;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 260px;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #3d3f43;
+  background: #1f2123;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  color: #f4f4f5;
+  color-scheme: dark; /* dark native calendar in the date inputs */
+}
+.aap-range-menu[hidden] {
+  display: none;
+}
+
+.aap-range-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: #d1d5db;
+}
+.aap-range-field input[type="date"] {
+  min-height: 30px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid #333538;
+  background: #0a0a0b;
+  color: #f4f4f5;
+  font: inherit;
+  font-size: 13px;
+}
+.aap-range-field input[type="date"]:focus {
+  outline: none;
+  border-color: #6b6f76;
+}
+
+.aap-range-err {
+  font-size: 12px;
+  color: #f87171;
+}
+.aap-range-err:empty {
+  display: none;
+}
+
+.aap-range-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+.aap-range-apply,
+.aap-range-clear {
+  min-height: 30px;
+  padding: 0 12px;
+  border-radius: 6px;
+  border: 1px solid #3d3f43;
+  background: transparent;
+  color: #d1d5db;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+.aap-range-clear:hover {
+  color: #f4f4f5;
+  border-color: #4f5257;
+}
+.aap-range-apply {
+  background: #333538;
+  color: #f4f4f5;
+  font-weight: 500;
+}
+.aap-range-apply:hover {
+  background: #45484d;
+}
+
+/* "Load N more" inside the status line */
+.aap-link-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #2dd4bf;
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.aap-link-btn:hover {
+  color: #5eead4;
+}
+
+.aap-status {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-left: auto;
+}
+
+.aap-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #e5e7eb;
+  cursor: pointer;
+}
+
+.aap-toggle-checkbox {
+  margin: 0;
+  cursor: pointer;
+  accent-color: #2dd4bf;
+}
+
+/* Keeps the colour dot vertically centred with, and tight against, its label
+   text — the dot's own margin-right handles the small gap to the text, and
+   the row's flex `gap` handles the space back to the checkbox. */
+.aap-toggle-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.aap-toggle-checkbox:disabled {
+  cursor: not-allowed;
+}
+
+.aap-toggle:has(.aap-toggle-checkbox:disabled) {
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.aap-tooltip {
+  position: fixed;
+  z-index: 9999;
+  /* Off by default — this is just a hover preview that follows the mouse,
+     and a click target under the cursor would only get in its own way.
+     app.js flips this to auto (via .aap-tt-pinned) once the tooltip is
+     pinned in place by clicking a bar, which is when the sort headers and
+     close button need to actually receive clicks. */
+  pointer-events: none;
+  background: #16181d;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-family: inherit;
+  color: #e5e7eb;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  min-width: 200px;
+}
+
+.aap-tooltip.aap-tt-pinned {
+  pointer-events: auto;
+  border-color: rgba(45, 212, 191, 0.5);
+}
+
+.aap-tt-pin-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  color: #9ca3af;
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.aap-tt-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  cursor: pointer;
+}
+
+.aap-tt-close:hover {
+  color: #e5e7eb;
+}
+
+.aap-tt-header {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 2px;
+}
+
+.aap-tt-header-label {
+  flex: 1;
+}
+
+.aap-tt-header-value {
+  font-size: 15px;
+}
+
+.aap-tt-date {
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+}
+
+.aap-tt-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 12px;
+  font-size: 11px;
+  color: #9ca3af;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.aap-tt-stats b {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.aap-tt-subtitle {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.aap-tt-note {
+  font-size: 12px;
+  color: #9ca3af;
+}
+
+.aap-tt-table {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+
+.aap-tt-table th,
+.aap-tt-table td {
+  padding: 2px 0;
+  white-space: nowrap;
+}
+
+.aap-tt-table th {
+  font-size: 10px;
+  font-weight: 500;
+  color: #6b7280;
+  text-align: right;
+  padding-left: 12px;
+  user-select: none;
+}
+
+/* Only a pinned tooltip has pointer-events, so only style the headers as
+   clickable there — on the plain hover preview the cursor can't reach them
+   anyway, and a pointer cursor would falsely promise a click will work. */
+.aap-tt-pinned .aap-tt-table th {
+  cursor: pointer;
+}
+
+.aap-tt-pinned .aap-tt-table th:hover {
+  color: #e5e7eb;
+}
+
+.aap-tt-table th.aap-tt-sorted {
+  color: #e5e7eb;
+}
+
+.aap-tt-sort-arrow {
+  font-size: 8px;
+  margin-left: 2px;
+}
+
+.aap-tt-table td:first-child,
+.aap-tt-table th:first-child {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.aap-tt-table td:not(:first-child) {
+  text-align: right;
+  padding-left: 12px;
+}
+
+.aap-tt-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+/* ---- highlights panel (between the chart card and the Actor table) ----
+   Styled after the table's card: #161718 fill, 1px #333538 border, 12px
+   radius. Spacing to its neighbours comes from the parent's own gap. */
+.aap-highlights {
+  padding: 14px 16px 12px;
+  border-radius: 12px;
+  border: 1px solid #333538;
+  background: #161718;
+  color: #e5e7eb;
+  font-family: inherit;
+}
+.aap-hl-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.aap-hl-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #f4f4f5;
+}
+.aap-hl-range {
+  flex: 1;
+  font-size: 12px;
+  color: #9ca3af;
+}
+.aap-hl-hide {
+  background: none;
+  border: none;
+  padding: 0;
+  color: #9ca3af;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.aap-hl-hide:hover {
+  color: #f4f4f5;
+  text-decoration: underline;
+}
+.aap-hl-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (max-width: 1100px) {
+  .aap-hl-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.aap-hl-card {
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid #2a2c2f;
+  background: #1b1c1d;
+  min-width: 0;
+}
+.aap-hl-card-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #9ca3af;
+  margin-bottom: 6px;
+}
+.aap-hl-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.aap-hl-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: "dot name value" "dot hint hint";
+  column-gap: 0;
+  align-items: baseline;
+  font-size: 13px;
+  line-height: 18px;
+}
+.aap-hl-icon {
+  grid-area: dot;
+  align-self: center;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: #2a2c2f;
+  flex: none;
+}
+.aap-hl-icon-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.aap-hl-icon-dot .aap-tt-dot {
+  margin: 0;
+}
+.aap-hl-name {
+  grid-area: name;
+  color: #f4f4f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 8px;
+}
+.aap-hl-value {
+  grid-area: value;
+  font-weight: 600;
+  color: #f4f4f5;
+  font-variant-numeric: tabular-nums;
+}
+.aap-hl-hint {
+  grid-area: hint;
+  font-size: 11px;
+  color: #6b7280;
+}
+.aap-hl-note,
+.aap-hl-foot {
+  font-size: 12px;
+  color: #9ca3af;
+}
+.aap-hl-foot {
+  margin-top: 8px;
+}

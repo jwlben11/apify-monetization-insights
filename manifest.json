@@ -1,0 +1,54 @@
+{
+  "manifest_version": 3,
+  "name": "Apify Monetization Insights",
+  "version": "0.4.0",
+  "description": "Adds a per-Actor daily breakdown to the Apify Console Monetization insights page — click a day to see which Actors drove it.",
+  "permissions": [
+    "storage",
+    "unlimitedStorage"
+  ],
+  "host_permissions": [
+    "https://console-backend.apify.com/*"
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "Apify Monetization Insights",
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://console.apify.com/*"
+      ],
+      "js": [
+        "content/token-sniffer.js"
+      ],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://console.apify.com/*"
+      ],
+      "js": [
+        "lib/format.js",
+        "lib/api.js",
+        "lib/cache.js",
+        "content/app.js"
+      ],
+      "css": [
+        "content/app.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}
