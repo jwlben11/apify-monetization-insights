@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Apify Monetization Insights",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Adds a per-Actor daily breakdown to the Apify Console Monetization insights page — click a day to see which Actors drove it.",
   "homepage_url": "https://github.com/jwlben11/apify-monetization-insights",
   "permissions": [
