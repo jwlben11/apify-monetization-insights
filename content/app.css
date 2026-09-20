@@ -24,11 +24,12 @@
   padding: 10px 0;
 }
 
-/* ---- date range: pills + custom button next to the Console's month picker
-   Mirrors the native react-select control (measured on the live page, Sep
-   2026): black #0a0a0b fill, 1px #333538 border, 6px radius, 36px tall,
-   14px/400 text, 16px chevron. */
+/* ---- date range: pills + custom button next to the Console's month picker */
 .aap-range-select {
+  --aap-range-bg: var(--color-neutral-background, #0a0a0b);
+  --aap-range-border: var(--color-neutral-border, #333538);
+  --aap-range-text: var(--color-neutral-text, #d1d5db);
+  --aap-range-hover: color-mix(in srgb, var(--aap-range-bg) 90%, var(--aap-range-text));
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -47,9 +48,9 @@
   min-height: 36px;
   padding: 0 14px;
   border-radius: 6px;
-  border: 1px solid #333538;
+  border: 1px solid var(--aap-range-border);
   background: transparent;
-  color: #d1d5db;
+  color: var(--aap-range-text);
   font: inherit;
   font-size: 14px;
   line-height: 20px;
@@ -57,15 +58,15 @@
   white-space: nowrap;
 }
 .aap-range-pill:hover {
-  border-color: #4f5257;
-  color: #f4f4f5;
+  background: var(--aap-range-hover);
+  color: var(--aap-range-text);
 }
 /* Active: the extension's teal accent (same as the toggle checkboxes and
    the pinned tooltip), filled, so it can't be mistaken for hover. */
 .aap-range-pill.aap-range-active {
   background: rgba(45, 212, 191, 0.18);
   border-color: #2dd4bf;
-  color: #ffffff;
+  color: var(--aap-range-text);
   font-weight: 500;
   box-shadow: inset 0 0 0 1px rgba(45, 212, 191, 0.35);
 }
@@ -82,10 +83,10 @@
 }
 .aap-range-trigger {
   padding: 0 10px 0 12px;
-  background: #0a0a0b;
+  background: var(--aap-range-bg);
 }
 .aap-range-trigger[aria-expanded="true"] {
-  border-color: #6b6f76;
+  border-color: var(--aap-range-text);
 }
 
 .aap-range-menu {
@@ -99,11 +100,11 @@
   min-width: 260px;
   padding: 12px;
   border-radius: 8px;
-  border: 1px solid #3d3f43;
-  background: #1f2123;
+  border: 1px solid var(--aap-range-border);
+  background: var(--aap-range-bg);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-  color: #f4f4f5;
-  color-scheme: dark; /* dark native calendar in the date inputs */
+  color: var(--aap-range-text);
+  color-scheme: inherit;
 }
 .aap-range-menu[hidden] {
   display: none;
@@ -115,21 +116,21 @@
   justify-content: space-between;
   gap: 10px;
   font-size: 13px;
-  color: #d1d5db;
+  color: var(--aap-range-text);
 }
 .aap-range-field input[type="date"] {
   min-height: 30px;
   padding: 0 8px;
   border-radius: 6px;
-  border: 1px solid #333538;
-  background: #0a0a0b;
-  color: #f4f4f5;
+  border: 1px solid var(--aap-range-border);
+  background: var(--aap-range-bg);
+  color: var(--aap-range-text);
   font: inherit;
   font-size: 13px;
 }
 .aap-range-field input[type="date"]:focus {
   outline: none;
-  border-color: #6b6f76;
+  border-color: var(--aap-range-text);
 }
 
 .aap-range-err {
@@ -150,24 +151,24 @@
   min-height: 30px;
   padding: 0 12px;
   border-radius: 6px;
-  border: 1px solid #3d3f43;
+  border: 1px solid var(--aap-range-border);
   background: transparent;
-  color: #d1d5db;
+  color: var(--aap-range-text);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
 }
 .aap-range-clear:hover {
-  color: #f4f4f5;
-  border-color: #4f5257;
+  color: var(--aap-range-text);
+  background: var(--aap-range-hover);
 }
 .aap-range-apply {
-  background: #333538;
-  color: #f4f4f5;
+  background: var(--aap-range-hover);
+  color: var(--aap-range-text);
   font-weight: 500;
 }
 .aap-range-apply:hover {
-  background: #45484d;
+  background: color-mix(in srgb, var(--aap-range-bg) 82%, var(--aap-range-text));
 }
 
 /* "Load N more" inside the status line */
@@ -388,14 +389,22 @@
 }
 
 /* ---- highlights panel (between the chart card and the Actor table) ----
-   Styled after the table's card: #161718 fill, 1px #333538 border, 12px
-   radius. Spacing to its neighbours comes from the parent's own gap. */
+   Apify's semantic tokens follow the Console's selected light/dark theme.
+   The fallbacks preserve the original dark appearance if those tokens are
+   temporarily unavailable while the page is loading. */
 .aap-highlights {
+  --aap-hl-bg: var(--color-neutral-background, #161718);
+  --aap-hl-border: var(--color-neutral-border, #333538);
+  --aap-hl-text: var(--color-neutral-text, #e5e7eb);
+  --aap-hl-muted: color-mix(in srgb, var(--aap-hl-text) 62%, transparent);
+  --aap-hl-subtle: color-mix(in srgb, var(--aap-hl-text) 46%, transparent);
+  --aap-hl-card-bg: color-mix(in srgb, var(--aap-hl-bg) 96%, var(--aap-hl-text));
+  --aap-hl-icon-bg: color-mix(in srgb, var(--aap-hl-bg) 88%, var(--aap-hl-text));
   padding: 14px 16px 12px;
   border-radius: 12px;
-  border: 1px solid #333538;
-  background: #161718;
-  color: #e5e7eb;
+  border: 1px solid var(--aap-hl-border);
+  background: var(--aap-hl-bg);
+  color: var(--aap-hl-text);
   font-family: inherit;
 }
 .aap-hl-head {
@@ -407,24 +416,24 @@
 .aap-hl-title {
   font-size: 14px;
   font-weight: 600;
-  color: #f4f4f5;
+  color: var(--aap-hl-text);
 }
 .aap-hl-range {
   flex: 1;
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--aap-hl-muted);
 }
 .aap-hl-hide {
   background: none;
   border: none;
   padding: 0;
-  color: #9ca3af;
+  color: var(--aap-hl-muted);
   font: inherit;
   font-size: 12px;
   cursor: pointer;
 }
 .aap-hl-hide:hover {
-  color: #f4f4f5;
+  color: var(--aap-hl-text);
   text-decoration: underline;
 }
 .aap-hl-grid {
@@ -440,15 +449,15 @@
 .aap-hl-card {
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid #2a2c2f;
-  background: #1b1c1d;
+  border: 1px solid var(--aap-hl-border);
+  background: var(--aap-hl-card-bg);
   min-width: 0;
 }
 .aap-hl-card-title {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: #9ca3af;
+  color: var(--aap-hl-muted);
   margin-bottom: 6px;
 }
 .aap-hl-list {
@@ -476,7 +485,7 @@
   margin-right: 8px;
   border-radius: 5px;
   object-fit: cover;
-  background: #2a2c2f;
+  background: var(--aap-hl-icon-bg);
   flex: none;
 }
 .aap-hl-icon-dot {
@@ -489,7 +498,7 @@
 }
 .aap-hl-name {
   grid-area: name;
-  color: #f4f4f5;
+  color: var(--aap-hl-text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -498,18 +507,18 @@
 .aap-hl-value {
   grid-area: value;
   font-weight: 600;
-  color: #f4f4f5;
+  color: var(--aap-hl-text);
   font-variant-numeric: tabular-nums;
 }
 .aap-hl-hint {
   grid-area: hint;
   font-size: 11px;
-  color: #6b7280;
+  color: var(--aap-hl-subtle);
 }
 .aap-hl-note,
 .aap-hl-foot {
   font-size: 12px;
-  color: #9ca3af;
+  color: var(--aap-hl-muted);
 }
 .aap-hl-foot {
   margin-top: 8px;
