@@ -35,6 +35,12 @@
   const TOOLBAR_CLASS = "aap-toolbar";
   const PALETTE = ["#2dd4bf", "#60a5fa", "#f472b6", "#facc15", "#a78bfa", "#fb923c", "#34d399", "#f87171"];
   const OTHER_COLOR = "#6b7280";
+  const RUN_STATUS_COLORS = {
+    succeeded: "#65a30d",
+    failed: "#e5484d",
+    aborted: "#eab308",
+    timedOut: "#14b8a6",
+  };
   const TOP_N = PALETTE.length;
   // How many Actors the click-to-pin tooltip table lists, ranked by the
   // active headline metric. Configurable from the extension's toolbar popup
@@ -106,9 +112,9 @@
 
   // How often a still-open tab re-runs the full per-Actor index. Without
   // this, the breakdown was indexed exactly once per page load, so a tab
-  // opened before today's first paid run showed "No paid Actor activity this
-  // day" for today forever (while the account-wide totals, refreshed every
-  // minute, plainly showed revenue). Matches the cache TTL — re-running
+  // opened before today's first run showed no per-Actor activity for today
+  // forever (while the account-wide totals, refreshed every minute, plainly
+  // showed runs or revenue). Matches the cache TTL — re-running
   // sooner would just be served the same fresh cache and no-op.
   const BREAKDOWN_REFRESH_MS = 15 * 60 * 1000;
   // After a failed index (network blip, token not ready yet) retry much
@@ -168,8 +174,8 @@
   const ALL_TIME_MAX_MONTHS = 72;
   const ALL_TIME_PROBE_BATCH = 6;
   // How many not-yet-cached months a single range load will index the
-  // per-Actor breakdown for on its own (1 + 2 requests per paid Actor,
-  // each). Beyond that the chart still shows every day's totals, and the
+  // per-Actor breakdown for on its own (one list request, then one run call
+  // per active Actor plus a margin call for earning Actors). Beyond that the
   // status offers a button to index the rest — so "All time" on an account
   // with years of history can't fire hundreds of requests unasked.
   const AUTO_INDEX_MONTHS = 6;
@@ -430,11 +436,14 @@
       canvas.className = "aap-chart";
       overlay.appendChild(canvas);
 
-      const tooltip = document.createElement("div");
-      tooltip.className = "aap-tooltip";
-      tooltip.style.display = "none";
-      tooltip.addEventListener("click", onTooltipClick);
-      document.body.appendChild(tooltip); // fixed-position, outside clipped ancestors
+      let tooltip = document.querySelector(".aap-tooltip");
+      if (!tooltip) {
+        tooltip = document.createElement("div");
+        tooltip.className = "aap-tooltip";
+        tooltip.style.display = "none";
+        tooltip.addEventListener("click", onTooltipClick);
+        document.body.appendChild(tooltip); // fixed-position, outside clipped ancestors
+      }
 
       // Hover shows a live preview that follows the cursor (as before) and
       // is not interactive — pointer-events is off by default. Clicking a
@@ -798,6 +807,11 @@
     const wrapper = findChartWrapper();
     const overlay = wrapper?.querySelector(`.${OVERLAY_CLASS}`);
     if (overlay) overlay.remove();
+    document.querySelectorAll(".aap-runs-overlay").forEach((el) => el.remove());
+    document.querySelectorAll("canvas[data-aap-runs-native]").forEach((canvas) => {
+      canvas.style.visibility = "";
+      delete canvas.dataset.aapRunsNative;
+    });
     if (wrapper?.previousElementSibling?.classList.contains(TOOLBAR_CLASS)) {
       wrapper.previousElementSibling.remove();
     }
@@ -812,6 +826,7 @@
     // page later would find pinnedDay still set and onHover would keep
     // silently no-op'ing forever (it defers entirely to a pinned tooltip).
     pinnedDay = null;
+    pinnedKind = null;
     tooltipDay = null;
   }
 
@@ -861,6 +876,7 @@
     }
     const overlay = ensureOverlay();
     if (!overlay) return;
+    ensureDailyRunsOverlay();
     syncKpiCards();
     // The first load of a range always runs, visible or not — macOS Chrome
     // reports an occluded window as `document.hidden`, so gating the initial
@@ -944,16 +960,18 @@
   // The scope key the user asked to index past AUTO_INDEX_MONTHS for.
   let indexAllFor = null;
 
-  // True when some day has revenue in the account-wide totals but no rows in
-  // the per-Actor breakdown — the signature of a breakdown indexed before
-  // that day's first paid activity (typically: a cache written earlier today,
-  // or right after the UTC day rolled over). Any day with real revenue must
-  // have at least one earning Actor, so this can't false-positive on a
-  // legitimately quiet day.
-  function breakdownMissingRevenueDay(daily, dayMetrics) {
-    return Object.entries(dayMetrics || {}).some(
-      ([day, m]) => m.revenue > 0 && !daily?.[day]?.length,
-    );
+  // True when a current-month cache predates activity now visible in the
+  // account-wide totals. Revenue and runs are checked independently because
+  // the Daily runs breakdown also includes Actors whose runs generated no
+  // revenue. This lets the cheap minute refresh invalidate a stale Actor
+  // index before its normal 15-minute TTL when a new day starts moving.
+  function breakdownMissingActiveDay(daily, dayMetrics) {
+    return Object.entries(dayMetrics || {}).some(([day, m]) => {
+      const rows = daily?.[day] || [];
+      if (m.revenue > 0 && !rows.some((r) => (r.revenue || 0) > 0)) return true;
+      const indexedRuns = rows.reduce((sum, r) => sum + (r.runs || 0), 0);
+      return m.runs > indexedRuns;
+    });
   }
 
   // A month with no revenue, cost or runs on any day: nothing to index (and,
@@ -1093,9 +1111,9 @@
         const cached = await AAP_CACHE.get(m, scope);
         if (!alive()) return;
         // A cache can be fresh by TTL yet already wrong: indexed before
-        // today's first paid run, it has no per-Actor rows for a day the
-        // just-fetched totals show revenue on. Re-index despite the TTL.
-        const usable = cached && !cached.stale && !(isCurrentMonth(m) && breakdownMissingRevenueDay(cached.daily, dayMetrics));
+        // today's first revenue-producing or free run, its per-Actor rows
+        // trail the just-fetched totals. Re-index despite the TTL.
+        const usable = cached && !cached.stale && !(isCurrentMonth(m) && breakdownMissingActiveDay(cached.daily, dayMetrics));
         if (usable) {
           monthData[m] = { ...monthData[m], daily: cached.daily, actorCount: cached.actorCount, breakdown: cached.breakdown || null, icons: cached.icons || {}, indexedAt: cached.updatedAt, complete: true };
           publish({ indexing: true });
@@ -1133,8 +1151,10 @@
   }
 
   // Indexes one month's per-Actor breakdown: the month's Actor list (one
-  // call), then profit-margin + run-statistics per paid Actor (two calls
-  // each, 5 in flight). Caches only complete passes: a handful of per-Actor
+  // call), then run-statistics per active Actor and profit-margin for Actors
+  // with revenue or cost (at most two calls each, 5 Actors in flight). This
+  // includes free-only activity in the Daily runs breakdown without making a
+  // pointless margin request for it. Caches only complete passes: a handful of per-Actor
   // fetches can transiently fail (a network blip, the auth token racing
   // readiness right after page load — see pooled()'s per-item catch), and
   // caching that would lock in an undercounted breakdown for the full TTL,
@@ -1150,20 +1170,27 @@
       runsStats: item.runsStats,
       usersStats: item.usersStats,
     }));
-    const paidActors = breakdown
-      .map((item) => ({
-        actorId: item.actor?._id,
-        actorName: item.actor?.title || item.actor?.name || item.actor?._id,
-        totalRevenueUsd: item.earningsStats?.totalRevenueUsd ?? 0,
-        totalCostUsd: item.earningsStats?.totalCostUsd ?? 0,
-      }))
-      .filter((a) => a.actorId && (a.totalRevenueUsd > 0 || a.totalCostUsd > 0));
+    const activeActors = breakdown
+      .map((item) => {
+        const totalRevenueUsd = item.earningsStats?.totalRevenueUsd ?? 0;
+        const totalCostUsd = item.earningsStats?.totalCostUsd ?? 0;
+        const hasRuns = Object.values(item.runsStats || {}).some((v) => typeof v === "number" && v > 0);
+        return {
+          actorId: item.actor?._id,
+          actorName: item.actor?.title || item.actor?.name || item.actor?._id,
+          totalRevenueUsd,
+          totalCostUsd,
+          paid: totalRevenueUsd > 0 || totalCostUsd > 0,
+          hasRuns,
+        };
+      })
+      .filter((a) => a.actorId && (a.paid || a.hasRuns));
 
     const perActor = await AAP_API.pooled(
-      paidActors,
+      activeActors,
       async (actor) => {
         const [margin, runs] = await Promise.all([
-          AAP_API.profitMargin(month, [actor.actorId]),
+          actor.paid ? AAP_API.profitMargin(month, [actor.actorId]) : Promise.resolve(null),
           AAP_API.runStatistics(month, [actor.actorId]),
         ]);
         return { actor, margin, runs };
@@ -1173,7 +1200,7 @@
     );
     const daily = buildDailyIndex(perActor);
     const complete = perActor.every((e) => e != null);
-    const actorCount = paidActors.length;
+    const actorCount = activeActors.length;
     // Actor icons (the Console's own pictureUrl), kept as a small per-month
     // map rather than on every daily row.
     const icons = {};
@@ -1250,7 +1277,8 @@
   }
 
   // Merges profit-margin + run-statistics into
-  // { [date]: { revenue, cost, profit, margin, runs, results, successRate } }.
+  // { [date]: { revenue, cost, profit, margin, runs, results,
+  //              succeeded, aborted, failed, timedOut, successRate } }.
   //
   // profit-margin returns BOTH `payingUsersUsd` and `allUsersUsd` per day.
   // The Console's own chart (and its "only paying users generate revenue and
@@ -1273,6 +1301,10 @@
         margin: m?.margin ?? null,
         runs: r?.TOTAL ?? 0,
         results: r?.RESULTS ?? 0,
+        succeeded: r?.SUCCEEDED ?? 0,
+        aborted: r?.ABORTED ?? 0,
+        failed: r?.FAILED ?? 0,
+        timedOut: r?.["TIMED-OUT"] ?? r?.TIMED_OUT ?? 0,
         successRate: r?.TOTAL ? r.SUCCEEDED / r.TOTAL : null,
       };
     }
@@ -1290,7 +1322,8 @@
     return METRICS.find((m) => m.kind === "line" && metricsOn[m.key])?.key || barMetric().key;
   }
 
-  // perActor: [{ actor, margin, runs }] -> { [date]: [{ actorId, name, revenue, cost, profit, margin, runs, results, successRate }] }
+  // perActor -> per-day Actor rows containing monetization, result, and
+  // run-status counts used by both interactive chart tooltips.
   function buildDailyIndex(perActor) {
     const daily = {};
     for (const entry of perActor) {
@@ -1312,6 +1345,9 @@
           margin: m?.margin ?? null,
           runs: r?.TOTAL ?? null,
           succeeded: r?.SUCCEEDED ?? null,
+          aborted: r?.ABORTED ?? null,
+          failed: r?.FAILED ?? null,
+          timedOut: r?.["TIMED-OUT"] ?? r?.TIMED_OUT ?? null,
           results: r?.RESULTS ?? null,
           successRate: r && r.TOTAL ? r.SUCCEEDED / r.TOTAL : null,
         };
@@ -1402,7 +1438,8 @@
   }
 
   function drawChart() {
-    if (headline === "margin") return; // native chart is on screen
+    drawDailyRunsChart();
+    if (headline === "margin") return; // native monetization chart is on screen
     const overlay = ensureOverlay();
     if (!overlay || !lastData) return;
     syncToolbar();
@@ -1632,8 +1669,8 @@
     if (!pending.length) return;
     const months = d.months || [];
     const indexedCount = months.length - pending.length;
-    // Rough request estimate for the button: 1 + 2 per paid Actor, using the
-    // months already indexed as the yardstick (20 Actors if none is).
+    // Conservative request estimate: up to 1 + 2 per active Actor, using
+    // indexed months as the yardstick (20 Actors if none is).
     const counts = (d.indexedMonths || []).map((m) => monthData[m]?.actorCount).filter((n) => n > 0);
     const avg = counts.length ? counts.reduce((a, b) => a + b, 0) / counts.length : 20;
     const est = Math.round(pending.length * (1 + 2 * avg));
@@ -1870,6 +1907,128 @@
     });
   }
 
+  // ---- Daily runs chart ----------------------------------------------------
+  // The native Daily runs card already has a stacked status chart, but its
+  // tooltip only shows account totals. Replace just that chart canvas with a
+  // matching dependency-free canvas backed by the per-Actor index above. The
+  // card, heading, note, and native summary figures remain untouched.
+  function findDailyRunsCanvas() {
+    const heading = [...document.querySelectorAll("h1, h2, h3, h4, h5, h6")].find((el) => {
+      const text = (el.textContent || "").trim().toLowerCase();
+      return text === "number of daily runs" || text === "daily runs";
+    });
+    if (!heading) return null;
+    // Start at the heading and stop at the first ancestor that contains a
+    // native canvas. This selects the heading's own card rather than an outer
+    // page section that also contains the monetization and results charts.
+    for (let el = heading.parentElement; el && el !== document.body; el = el.parentElement) {
+      const canvas = el.querySelector("canvas:not(.aap-chart):not(.aap-runs-chart)");
+      if (canvas) return canvas;
+    }
+    return null;
+  }
+
+  function ensureDailyRunsOverlay() {
+    if (!onInsightsRoute()) return null;
+    const nativeCanvas = findDailyRunsCanvas();
+    if (!nativeCanvas) return null;
+    const host = nativeCanvas.parentElement;
+    if (!host) return null;
+    if (getComputedStyle(host).position === "static") host.style.position = "relative";
+    nativeCanvas.dataset.aapRunsNative = "true";
+    nativeCanvas.style.visibility = "hidden";
+
+    let overlay = host.querySelector(":scope > .aap-runs-overlay");
+    if (!overlay) {
+      overlay = document.createElement("div");
+      overlay.className = "aap-runs-overlay";
+      const canvas = document.createElement("canvas");
+      canvas.className = "aap-runs-chart";
+      canvas.setAttribute("aria-label", "Daily runs by status. Hover a day for the Actor breakdown; click to pin it.");
+      canvas.addEventListener("mousemove", onHover);
+      canvas.addEventListener("mouseleave", () => {
+        if (pinnedDay == null) hideTooltip();
+      });
+      canvas.addEventListener("click", onChartClick);
+      overlay.appendChild(canvas);
+      host.appendChild(overlay);
+    }
+    return overlay;
+  }
+
+  function drawDailyRunsChart() {
+    const overlay = ensureDailyRunsOverlay();
+    if (!overlay || !lastData) return;
+    const canvas = overlay.querySelector(".aap-runs-chart");
+    const rect = overlay.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const days = Object.keys(lastData.dayMetrics || {}).sort();
+    canvas.__aapDays = days;
+    if (!days.length) return;
+    ctx.font = `13px ${getComputedStyle(overlay).fontFamily || "sans-serif"}`;
+    ctx.textBaseline = "middle";
+
+    const maxRuns = Math.max(1, ...days.map((day) => lastData.dayMetrics[day]?.runs || 0));
+    const { max, ticks } = niceScale(maxRuns);
+    let labelWidth = 0;
+    for (let i = 0; i <= ticks; i++) labelWidth = Math.max(labelWidth, ctx.measureText(AAPF.compact(max * (i / ticks))).width);
+    const leftPad = Math.ceil(labelWidth) + 16;
+    const rightPad = 16;
+    canvas.__aapPads = { left: leftPad, right: rightPad };
+    const plotW = rect.width - leftPad - rightPad;
+    const plotH = rect.height - PAD.top - PAD.bottom;
+    const slot = plotW / days.length;
+    const barW = slot < 6 ? Math.max(1, slot) : Math.max(4, slot * 0.62);
+
+    ctx.strokeStyle = "rgba(255,255,255,0.08)";
+    for (let i = 0; i <= ticks; i++) {
+      const frac = i / ticks;
+      const y = PAD.top + plotH * (1 - frac);
+      ctx.beginPath();
+      ctx.moveTo(leftPad, y);
+      ctx.lineTo(rect.width - rightPad, y);
+      ctx.stroke();
+      ctx.fillStyle = AXIS_LABEL_COLOR;
+      ctx.textAlign = "right";
+      ctx.fillText(AAPF.compact(max * frac), leftPad - 8, y);
+    }
+
+    ctx.textAlign = "center";
+    ctx.textBaseline = "top";
+    ctx.fillStyle = AXIS_LABEL_COLOR;
+    for (const { i, text } of xAxisLabels(days, slot, ctx)) {
+      ctx.fillText(text, leftPad + i * slot + slot / 2, rect.height - PAD.bottom + 6);
+    }
+
+    const statuses = [
+      ["succeeded", RUN_STATUS_COLORS.succeeded],
+      ["aborted", RUN_STATUS_COLORS.aborted],
+      ["failed", RUN_STATUS_COLORS.failed],
+      ["timedOut", RUN_STATUS_COLORS.timedOut],
+    ];
+    days.forEach((day, i) => {
+      const dm = lastData.dayMetrics[day] || {};
+      const x = leftPad + i * slot + slot / 2;
+      let y = PAD.top + plotH;
+      for (const [key, color] of statuses) {
+        const h = ((dm[key] || 0) / max) * plotH;
+        if (h <= 0) continue;
+        y -= h;
+        ctx.fillStyle = color;
+        ctx.fillRect(x - barW / 2, y, barW, h);
+      }
+    });
+  }
+
   // ---- hover tooltip --------------------------------------------------------
   // Maps a clientX on the canvas to the day it falls in, or null outside the
   // plot area. Shared by hover (preview) and click (pin) so they agree on
@@ -1889,12 +2048,16 @@
     return days[idx];
   }
 
+  function tooltipKindForCanvas(canvas) {
+    return canvas.classList.contains("aap-runs-chart") ? "runs" : "monetization";
+  }
+
   function onHover(e) {
     if (pinnedDay != null) return; // pinned tooltip ignores hover entirely until unpinned
     if (!lastData) return hideTooltip();
     const day = dayAtClientX(e.currentTarget, e.clientX);
     if (day == null) return hideTooltip();
-    showTooltip(e.clientX, e.clientY, day);
+    showTooltip(e.clientX, e.clientY, day, tooltipKindForCanvas(e.currentTarget));
   }
 
   // Clicking a bar pins the tooltip in place: it stops following the mouse
@@ -1908,14 +2071,18 @@
     if (!lastData) return;
     const day = dayAtClientX(e.currentTarget, e.clientX);
     if (day == null) return;
-    if (pinnedDay === day) {
+    const kind = tooltipKindForCanvas(e.currentTarget);
+    if (pinnedDay === day && pinnedKind === kind) {
       pinnedDay = null;
-      showTooltip(e.clientX, e.clientY, day); // resume as a normal hover preview
+      pinnedKind = null;
+      showTooltip(e.clientX, e.clientY, day, kind); // resume as a normal hover preview
       return;
     }
     pinnedDay = day;
+    pinnedKind = kind;
+    tooltipKind = kind;
     tooltipDay = day;
-    tooltipSort = { key: primaryMetric(), dir: "desc" };
+    tooltipSort = { key: kind === "runs" ? "runs" : primaryMetric(), dir: "desc" };
     renderTooltip();
     positionTooltip(e.clientX, e.clientY);
   }
@@ -1923,8 +2090,8 @@
   document.addEventListener("click", (e) => {
     if (pinnedDay == null) return;
     const tooltip = document.querySelector(".aap-tooltip");
-    const canvas = document.querySelector(".aap-chart");
-    if (tooltip?.contains(e.target) || canvas?.contains(e.target)) return; // handled above
+    const canvas = e.target instanceof Element ? e.target.closest(".aap-chart, .aap-runs-chart") : null;
+    if (tooltip?.contains(e.target) || canvas) return; // handled above
     hideTooltip();
   });
   document.addEventListener("keydown", (e) => {
@@ -1942,6 +2109,13 @@
     { sort: "runs", label: "Runs", fmt: (r) => AAPF.compact(r.runs || 0) },
     { sort: "results", label: "Results", fmt: (r) => AAPF.compact(r.results || 0) },
   ];
+  const RUN_TOOLTIP_COLUMNS = [
+    { sort: "name", label: "Actor" },
+    { sort: "runs", label: "Total", fmt: (r) => AAPF.compact(r.runs || 0) },
+    { sort: "succeeded", label: "Successful", fmt: (r) => AAPF.compact(r.succeeded || 0) },
+    { sort: "aborted", label: "Aborted", fmt: (r) => AAPF.compact(r.aborted || 0) },
+    { sort: "failed", label: "Failed", fmt: (r) => AAPF.compact(r.failed || 0) },
+  ];
 
   // Which day's table is currently shown, and how its rows are ordered.
   // Reset to "by the active headline metric, descending" whenever the
@@ -1949,13 +2123,16 @@
   // only, so moving to a new day always starts from the metric-relevant
   // view again.
   let pinnedDay = null; // non-null while the tooltip is pinned (see onChartClick)
+  let pinnedKind = null;
+  let tooltipKind = "monetization";
   let tooltipDay = null;
   let tooltipSort = { key: "revenue", dir: "desc" };
 
-  function showTooltip(clientX, clientY, day) {
-    if (day !== tooltipDay) {
+  function showTooltip(clientX, clientY, day, kind = "monetization") {
+    if (day !== tooltipDay || kind !== tooltipKind) {
       tooltipDay = day;
-      tooltipSort = { key: primaryMetric(), dir: "desc" };
+      tooltipKind = kind;
+      tooltipSort = { key: kind === "runs" ? "runs" : primaryMetric(), dir: "desc" };
     }
     renderTooltip();
     positionTooltip(clientX, clientY);
@@ -1986,10 +2163,14 @@
     const day = tooltipDay;
     if (!tooltip || day == null || !lastData) return;
 
-    const pinned = pinnedDay === day;
+    const pinned = pinnedDay === day && pinnedKind === tooltipKind;
     tooltip.classList.toggle("aap-tt-pinned", pinned);
 
     const dm = (lastData.dayMetrics || {})[day];
+    if (tooltipKind === "runs") {
+      renderRunsTooltip(tooltip, day, dm, pinned);
+      return;
+    }
     const metric = primaryMetric();
     const metricInfo = metricDef(metric);
     const headlineValue = BAR_METRICS[metric] ? AAPF.money(dm?.[metric] ?? 0) : AAPF.compact(dm?.[metric] ?? 0);
@@ -2060,6 +2241,62 @@
     tooltip.style.display = "block";
   }
 
+  function renderRunsTooltip(tooltip, day, dm, pinned) {
+    let html = pinned
+      ? `<div class="aap-tt-pin-bar">📌 Pinned — click the bar again or press Esc to close<button type="button" class="aap-tt-close" aria-label="Close">×</button></div>`
+      : "";
+    html += `<div class="aap-tt-header"><span class="aap-tt-header-label">Daily runs</span><span class="aap-tt-header-value">${AAPF.compact(dm?.runs ?? 0)}</span></div>`;
+    html += `<div class="aap-tt-date">${AAPF.longDate(day)}</div>`;
+    html += '<div class="aap-tt-run-stats">';
+    const stats = [
+      ["Total", dm?.runs ?? 0, null],
+      ["Successful", dm?.succeeded ?? 0, RUN_STATUS_COLORS.succeeded],
+      ["Aborted", dm?.aborted ?? 0, RUN_STATUS_COLORS.aborted],
+      ["Failed", dm?.failed ?? 0, RUN_STATUS_COLORS.failed],
+    ];
+    if ((dm?.timedOut ?? 0) > 0) stats.push(["Timed out", dm.timedOut, RUN_STATUS_COLORS.timedOut]);
+    for (const [label, value, color] of stats) {
+      const dot = color ? `<span class="aap-tt-dot" style="background:${color}"></span>` : "";
+      html += `<span>${dot}${label}</span><b>${AAPF.compact(value)}</b>`;
+    }
+    html += "</div>";
+
+    const topActors = [...(lastData.daily?.[day] || [])]
+      .filter((row) => (row.runs || 0) > 0)
+      .sort((a, b) => (b.runs || 0) - (a.runs || 0))
+      .slice(0, tooltipActorCount);
+    if (topActors.length) {
+      const sortDir = tooltipSort.dir === "asc" ? 1 : -1;
+      const sorted = [...topActors].sort((a, b) => {
+        if (tooltipSort.key === "name") return sortDir * a.name.localeCompare(b.name);
+        return sortDir * ((a[tooltipSort.key] || 0) - (b[tooltipSort.key] || 0));
+      });
+      html += `<div class="aap-tt-subtitle">Top ${tooltipActorCount} Actors by total runs</div>`;
+      html += '<table class="aap-tt-table aap-tt-runs-table"><thead><tr>';
+      for (const col of RUN_TOOLTIP_COLUMNS) {
+        const active = tooltipSort.key === col.sort;
+        const arrow = active ? `<span class="aap-tt-sort-arrow">${tooltipSort.dir === "asc" ? "▲" : "▼"}</span>` : "";
+        html += `<th data-sort="${col.sort}" class="${active ? "aap-tt-sorted" : ""}">${col.label}${arrow}</th>`;
+      }
+      html += "</tr></thead><tbody>";
+      for (const row of sorted) {
+        const color = colorByActorId.get(row.actorId) || OTHER_COLOR;
+        html += `<tr><td><span class="aap-tt-dot" style="background:${color}"></span>${escapeHtml(row.name)}</td>`;
+        for (const col of RUN_TOOLTIP_COLUMNS.slice(1)) html += `<td>${col.fmt(row)}</td>`;
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+    } else if ((lastData.indexedMonths || []).includes(monthOf(day))) {
+      html += '<div class="aap-tt-note">No Actor runs this day.</div>';
+    } else if (lastData.indexing) {
+      html += `<div class="aap-tt-note">Indexing Actors… ${lastData.progress ? `${lastData.progress.done}/${lastData.progress.total}` : ""}</div>`;
+    } else {
+      html += '<div class="aap-tt-note">Actor breakdown not loaded for this month yet, see "Load more" above.</div>';
+    }
+    tooltip.innerHTML = html;
+    tooltip.style.display = "block";
+  }
+
   function positionTooltip(clientX, clientY) {
     const tooltip = document.querySelector(".aap-tooltip");
     if (!tooltip) return;
@@ -2080,6 +2317,7 @@
     }
     tooltipDay = null;
     pinnedDay = null; // any path that closes the tooltip also releases the pin
+    pinnedKind = null;
   }
 
   // Traces `pts` as a smooth Catmull-Rom spline converted to cubic beziers —

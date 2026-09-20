@@ -10,6 +10,20 @@
   cursor: crosshair;
 }
 
+/* Replaces only the canvas area in the native "Number of daily runs" card;
+   the card heading, note, and summary panel stay native. */
+.aap-runs-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+.aap-runs-chart {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
 .aap-toolbar {
   margin-bottom: 4px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
@@ -314,6 +328,27 @@
   font-weight: 600;
 }
 
+.aap-tt-run-stats {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto;
+  gap: 3px 18px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-size: 11px;
+  color: #9ca3af;
+}
+.aap-tt-run-stats span {
+  display: inline-flex;
+  align-items: center;
+}
+.aap-tt-run-stats b {
+  color: #e5e7eb;
+  text-align: right;
+  font-weight: 600;
+}
+
 .aap-tt-subtitle {
   font-size: 10px;
   text-transform: uppercase;
@@ -378,6 +413,11 @@
 .aap-tt-table td:not(:first-child) {
   text-align: right;
   padding-left: 12px;
+}
+
+.aap-tt-runs-table th:not(:first-child),
+.aap-tt-runs-table td:not(:first-child) {
+  padding-left: 16px;
 }
 
 .aap-tt-dot {
