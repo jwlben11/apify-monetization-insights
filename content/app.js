@@ -7,7 +7,7 @@
  * "Breakdown by actor" checkbox that stacks the Revenue bars by Actor.
  * Hovering any day shows a tooltip with that day's full stats plus the top
  * Actors (10 by default, configurable from the toolbar popup) by whichever
- * metric is active. We draw our own chart (rather
+ * metric is active; clicking pins it and lists every Actor, scrollable. We draw our own chart (rather
  * than reaching into Apify's) because it's a black-box Chart.js canvas with
  * no exposed instance to restyle or hook into.
  *
@@ -42,7 +42,7 @@
     timedOut: "#14b8a6",
   };
   const TOP_N = PALETTE.length;
-  // How many Actors the click-to-pin tooltip table lists, ranked by the
+  // How many Actors the hover tooltip table lists, ranked by the
   // active headline metric. Configurable from the extension's toolbar popup
   // (Settings section) — this is just the fallback until that pref loads.
   const DEFAULT_TOOLTIP_ACTOR_COUNT = 10;
@@ -2115,6 +2115,7 @@
     { sort: "succeeded", label: "Successful", fmt: (r) => AAPF.compact(r.succeeded || 0) },
     { sort: "aborted", label: "Aborted", fmt: (r) => AAPF.compact(r.aborted || 0) },
     { sort: "failed", label: "Failed", fmt: (r) => AAPF.compact(r.failed || 0) },
+    { sort: "timedOut", label: "Timed out", fmt: (r) => AAPF.compact(r.timedOut || 0) },
   ];
 
   // Which day's table is currently shown, and how its rows are ordered.
@@ -2199,11 +2200,12 @@
     html += `<span>Success <b>${dm?.successRate != null ? AAPF.pct(dm.successRate) : "–"}</b></span>`;
     html += "</div>";
 
-    // The Actor count is always picked by the active headline metric —
-    // clicking a column header only reorders that same set, it never swaps
-    // which Actors are shown.
+    // The hover preview lists the top Actors by the active headline metric;
+    // a pinned tooltip lists every Actor active that day in a scrollable
+    // table. Clicking a column header only reorders that same set, it never
+    // swaps which Actors are shown.
     const ranked = [...(lastData.daily?.[day] || [])].sort((a, b) => (b[metric] || 0) - (a[metric] || 0));
-    const topActors = ranked.slice(0, tooltipActorCount);
+    const topActors = pinned ? ranked : ranked.slice(0, tooltipActorCount);
 
     if (topActors.length) {
       const sortDir = tooltipSort.dir === "asc" ? 1 : -1;
@@ -2212,8 +2214,8 @@
         return sortDir * ((a[tooltipSort.key] || 0) - (b[tooltipSort.key] || 0));
       });
 
-      html += `<div class="aap-tt-subtitle">Top ${tooltipActorCount} Actors by ${metricInfo.label}</div>`;
-      html += '<table class="aap-tt-table"><thead><tr>';
+      html += `<div class="aap-tt-subtitle">${actorListTitle(pinned, topActors.length, ranked.length)} by ${metricInfo.label}</div>`;
+      html += '<div class="aap-tt-scroll"><table class="aap-tt-table"><thead><tr>';
       for (const col of TOOLTIP_COLUMNS) {
         const isSortCol = tooltipSort.key === col.sort;
         const arrow = isSortCol ? `<span class="aap-tt-sort-arrow">${tooltipSort.dir === "asc" ? "▲" : "▼"}</span>` : "";
@@ -2229,7 +2231,7 @@
         for (const col of TOOLTIP_COLUMNS.slice(1)) html += `<td>${col.fmt(row)}</td>`;
         html += "</tr>";
       }
-      html += "</tbody></table>";
+      html += "</tbody></table></div>";
     } else if ((lastData.indexedMonths || []).includes(monthOf(day))) {
       html += `<div class="aap-tt-note">No paid Actor activity this day.</div>`;
     } else if (lastData.indexing) {
@@ -2261,18 +2263,18 @@
     }
     html += "</div>";
 
-    const topActors = [...(lastData.daily?.[day] || [])]
+    const ranked = [...(lastData.daily?.[day] || [])]
       .filter((row) => (row.runs || 0) > 0)
-      .sort((a, b) => (b.runs || 0) - (a.runs || 0))
-      .slice(0, tooltipActorCount);
+      .sort((a, b) => (b.runs || 0) - (a.runs || 0));
+    const topActors = pinned ? ranked : ranked.slice(0, tooltipActorCount);
     if (topActors.length) {
       const sortDir = tooltipSort.dir === "asc" ? 1 : -1;
       const sorted = [...topActors].sort((a, b) => {
         if (tooltipSort.key === "name") return sortDir * a.name.localeCompare(b.name);
         return sortDir * ((a[tooltipSort.key] || 0) - (b[tooltipSort.key] || 0));
       });
-      html += `<div class="aap-tt-subtitle">Top ${tooltipActorCount} Actors by total runs</div>`;
-      html += '<table class="aap-tt-table aap-tt-runs-table"><thead><tr>';
+      html += `<div class="aap-tt-subtitle">${actorListTitle(pinned, topActors.length, ranked.length)} by total runs</div>`;
+      html += '<div class="aap-tt-scroll"><table class="aap-tt-table aap-tt-runs-table"><thead><tr>';
       for (const col of RUN_TOOLTIP_COLUMNS) {
         const active = tooltipSort.key === col.sort;
         const arrow = active ? `<span class="aap-tt-sort-arrow">${tooltipSort.dir === "asc" ? "▲" : "▼"}</span>` : "";
@@ -2285,7 +2287,7 @@
         for (const col of RUN_TOOLTIP_COLUMNS.slice(1)) html += `<td>${col.fmt(row)}</td>`;
         html += "</tr>";
       }
-      html += "</tbody></table>";
+      html += "</tbody></table></div>";
     } else if ((lastData.indexedMonths || []).includes(monthOf(day))) {
       html += '<div class="aap-tt-note">No Actor runs this day.</div>';
     } else if (lastData.indexing) {
@@ -2297,6 +2299,14 @@
     tooltip.style.display = "block";
   }
 
+  // "All 37 Actors" once pinned; "Top 10 of 37 Actors" on the hover preview
+  // (just "3 Actors" when the preview already shows everyone).
+  function actorListTitle(pinned, shown, total) {
+    const noun = total === 1 ? "Actor" : "Actors";
+    if (pinned) return total > 1 ? `All ${total} ${noun}` : `${total} ${noun}`;
+    return shown < total ? `Top ${shown} of ${total} ${noun}` : `${total} ${noun}`;
+  }
+
   function positionTooltip(clientX, clientY) {
     const tooltip = document.querySelector(".aap-tooltip");
     if (!tooltip) return;
@@ -2305,6 +2315,8 @@
     let top = clientY + 14;
     if (left + ttRect.width > window.innerWidth - 8) left = clientX - ttRect.width - 14;
     if (top + ttRect.height > window.innerHeight - 8) top = clientY - ttRect.height - 14;
+    left = Math.max(8, left);
+    top = Math.max(8, top);
     tooltip.style.left = `${left}px`;
     tooltip.style.top = `${top}px`;
   }

@@ -6,11 +6,11 @@ An open-source Chrome/Chromium extension that adds richer analytics to the Apify
 
 - View revenue, costs, profit, runs, results, and success rate over custom date ranges.
 - Click a monetization day to see which Actors contributed to its totals.
-- Hover or click a day in **Number of daily runs** for a sortable per-Actor breakdown of total, successful, aborted, and failed runs.
+- Hover or click a day in **Number of daily runs** for a sortable per-Actor breakdown of total, successful, aborted, failed, and timed-out runs.
 - Compare top profit, top cost, and Actor success rates at a glance.
 - Follow native Actor filters and organization context.
 - Cache analytics locally to reduce repeat API requests.
-- Configure highlights and the number of Actors shown in breakdown tooltips.
+- Configure highlights and the number of Actors shown in hover tooltips; click a day to pin it and scroll through every Actor.
 
 ## Install from source
 

@@ -362,6 +362,20 @@
   color: #9ca3af;
 }
 
+/* Wraps the per-Actor table. Pinned tooltips list every Actor that day, so
+   cap the height and scroll inside it, keeping the header row in view. */
+.aap-tt-scroll {
+  max-height: min(320px, 45vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.aap-tt-table thead th {
+  position: sticky;
+  top: 0;
+  background: #16181d; /* matches .aap-tooltip so scrolled rows hide beneath it */
+}
+
 .aap-tt-table {
   border-collapse: collapse;
   font-size: 12px;
